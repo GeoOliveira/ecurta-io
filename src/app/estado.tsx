@@ -1,0 +1,1 @@
+import Link from"next/link";export function StatePage({title,text}:{title:string;text:string}){return <main className="container state"><div className="eyebrow">Encurta.io</div><h1>{title}</h1><p className="lead">{text}</p><p><Link className="button" href="/">Ir para a página inicial</Link></p><p><Link href="/denunciar">Contato e denúncia de abuso</Link></p></main>}

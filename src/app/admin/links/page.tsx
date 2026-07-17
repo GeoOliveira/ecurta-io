@@ -1,0 +1,1 @@
+import Link from"next/link";export default()=> <main className="container admin"><h1>Links</h1><p className="lead">A listagem será preenchida a partir do Supabase, sem exposição pública dos registros.</p><Link className="button" href="/admin/links/novo">Criar link</Link><section className="panel">Nenhum link para exibir.</section></main>;

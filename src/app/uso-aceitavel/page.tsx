@@ -1,0 +1,1 @@
+import{StatePage}from"../estado";export default()=> <StatePage title="Uso aceitável" text="É proibido usar o serviço para phishing, fraude, spam, malware, conteúdo ilegal, impersonação ou evasão de bloqueios."/>;

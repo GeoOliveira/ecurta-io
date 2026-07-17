@@ -1,0 +1,1 @@
+import{StatePage}from"../estado";export default()=> <StatePage title="Privacidade" text="Coletamos somente dados mínimos para segurança e métricas agregadas. IPs não são armazenados integralmente."/>;

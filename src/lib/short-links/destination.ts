@@ -1,0 +1,1 @@
+import {allowedHosts}from"../config";export function validateDestinationUrl(raw:string){try{const u=new URL(raw);return u.protocol==="https:"&&!u.username&&!u.password&&!u.port&&allowedHosts().includes(u.hostname.toLowerCase())&&/^\/[0-9]+$/.test(u.pathname)&&u.toString().length<=2100}catch{return false}}

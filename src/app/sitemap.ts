@@ -1,0 +1,1 @@
+import type{MetadataRoute}from"next";export default function sitemap():MetadataRoute.Sitemap{const base=process.env.NEXT_PUBLIC_SHORT_DOMAIN??"https://encurta.io";return["/","/privacidade","/termos","/uso-aceitavel","/denunciar"].map(url=>({url:`${base}${url}`,lastModified:new Date()}))}

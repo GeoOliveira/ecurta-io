@@ -1,0 +1,1 @@
+export default()=> <main className="container admin"><h1>Configurações</h1><section className="panel"><p>Supabase configurado: <b>{process.env.SUPABASE_URL?"sim":"não"}</b></p><p>Domínio configurado: <b>{process.env.NEXT_PUBLIC_SHORT_DOMAIN?"sim":"não"}</b></p><p>Segredo de hash configurado: <b>{process.env.CLICK_HASH_SECRET?"sim":"não"}</b></p></section></main>;
