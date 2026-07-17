@@ -8,3 +8,4 @@ begin
 end;
 $$;
 revoke all on function public.register_short_link_click(uuid, boolean) from public, anon, authenticated;
+grant execute on function public.register_short_link_click(uuid, boolean) to service_role;
