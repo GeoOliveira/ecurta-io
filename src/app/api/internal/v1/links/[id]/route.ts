@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getAlcanceIaEnvConfig } from "@/lib/integrations/alcance-ia/config";
+import { getRequestIntegrationConfig } from "@/lib/integrations/config";
 import { authenticateIntegrationRequest } from "@/lib/integrations/alcance-ia/authenticate";
 import {
   InternalApiError,
@@ -25,21 +25,21 @@ type Context = { params: Promise<{ id: string }> };
 
 function rateLimits(
   loaded: Awaited<ReturnType<typeof getIntegrationSettings>>,
-  config: ReturnType<typeof getAlcanceIaEnvConfig>,
+  config: ReturnType<typeof getRequestIntegrationConfig>,
 ) {
   const setting = (key: string, fallback: number) =>
     Number(loaded.settings.get(key) ?? fallback);
   return {
     minute: setting(
-      "integrations.alcance_ia.minute_limit",
+      `integrations.${config.integration}.minute_limit`,
       config.minuteLimit,
     ),
     hour: setting(
-      "integrations.alcance_ia.hourly_limit",
+      `integrations.${config.integration}.hourly_limit`,
       config.hourlyLimit,
     ),
     day: setting(
-      "integrations.alcance_ia.daily_limit",
+      `integrations.${config.integration}.daily_limit`,
       config.dailyLimit,
     ),
   };
@@ -53,9 +53,11 @@ function checkedId(id: string) {
 
 export async function GET(request: Request, { params }: Context) {
   const started = Date.now();
+  let source: "alcance_ia" | "geobot" = "alcance_ia";
   let requestId: string | null = request.headers.get("x-request-id");
   try {
-    const config = getAlcanceIaEnvConfig();
+    const config = getRequestIntegrationConfig(request);
+    source = config.integration;
     const auth = authenticateIntegrationRequest(request, "", config);
     requestId = auth.requestId;
     const id = checkedId((await params).id);
@@ -69,7 +71,7 @@ export async function GET(request: Request, { params }: Context) {
       "GET",
     );
     const result = await Promise.race([
-      getInternalLink(id),
+      getInternalLink(id, config.integration),
       new Promise<never>((_, reject) =>
         setTimeout(
           () => reject(new InternalApiError("SERVICE_UNAVAILABLE", 503, true)),
@@ -78,6 +80,7 @@ export async function GET(request: Request, { params }: Context) {
       ),
     ]);
     await recordIntegrationEvent(result.db, {
+      source,
       requestId,
       endpoint: "/api/internal/v1/links/{id}",
       method: "GET",
@@ -121,15 +124,19 @@ export async function GET(request: Request, { params }: Context) {
 
 export async function PATCH(request: Request, { params }: Context) {
   const started = Date.now();
+  let source: "alcance_ia" | "geobot" = "alcance_ia";
   let requestId: string | null = request.headers.get("x-request-id");
   let db: Awaited<ReturnType<typeof getIntegrationSettings>>["db"] | null =
     null;
   try {
-    const config = getAlcanceIaEnvConfig();
-    if (!request.headers
-      .get("content-type")
-      ?.toLowerCase()
-      .startsWith("application/json"))
+    const config = getRequestIntegrationConfig(request);
+    source = config.integration;
+    if (
+      !request.headers
+        .get("content-type")
+        ?.toLowerCase()
+        .startsWith("application/json")
+    )
       throw new InternalApiError("INVALID_CONTENT_TYPE", 415);
     const declared = Number(request.headers.get("content-length") ?? 0);
     if (declared > config.maxBodyBytes)
@@ -167,7 +174,7 @@ export async function PATCH(request: Request, { params }: Context) {
       "PATCH",
     );
     const result = await Promise.race([
-      updateInternalLink(id, parsed.data, requestId),
+      updateInternalLink(id, parsed.data, requestId, config.integration),
       new Promise<never>((_, reject) =>
         setTimeout(
           () => reject(new InternalApiError("SERVICE_UNAVAILABLE", 503, true)),
@@ -176,6 +183,7 @@ export async function PATCH(request: Request, { params }: Context) {
       ),
     ]);
     await recordIntegrationEvent(result.db, {
+      source,
       requestId,
       endpoint: "/api/internal/v1/links/{id}",
       method: "PATCH",
@@ -202,6 +210,7 @@ export async function PATCH(request: Request, { params }: Context) {
         : new InternalApiError("INTERNAL_ERROR", 500, true);
     if (db && requestId)
       await recordIntegrationEvent(db, {
+        source,
         requestId,
         endpoint: "/api/internal/v1/links/{id}",
         method: "PATCH",

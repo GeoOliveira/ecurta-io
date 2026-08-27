@@ -23,7 +23,7 @@ import { CopyButton } from "@/components/copy-button";
 export const metadata: Metadata = {
   title: "Documentação da API privada | Encurta.io",
   description:
-    "Documentação técnica interna da integração entre Encurta.io e Alcance IA.",
+    "Documentação técnica interna das integrações Encurta.io, Alcance IA e Geobot.",
   robots: { index: false, follow: false, nocache: true },
 };
 export const dynamic = "force-dynamic";
@@ -150,11 +150,11 @@ export default async function DocsPage() {
             <h1>
               Integração técnica
               <br />
-              <span>Encurta.io × Alcance IA</span>
+              <span>Encurta.io × Alcance IA e Geobot</span>
             </h1>
             <p>
               Contrato oficial para criação segura e idempotente de links curtos
-              do WhatsApp entre os dois backends.
+              do WhatsApp entre backends autorizados.
             </p>
             <div className="docs-badges">
               <span>
@@ -197,7 +197,7 @@ export default async function DocsPage() {
         <article className="docs-content">
           <Section id="visao-geral" number="01" title="Visão geral">
             <p>
-              A Alcance IA valida a solicitação no próprio backend. O Encurta.io
+              Alcance IA e Geobot validam a solicitação nos próprios backends. O Encurta.io
               autentica novamente, valida o telefone, gera internamente o
               destino <code>wa.me</code>, valida ou gera um slug seguro e persiste
               tudo em uma transação.
@@ -205,7 +205,7 @@ export default async function DocsPage() {
             <div className="docs-flow">
               <Flow
                 icon={<Webhook />}
-                title="Alcance IA"
+                title="Alcance IA / Geobot"
                 text="Prepara e assina"
               />
               <i>→</i>
@@ -234,7 +234,7 @@ export default async function DocsPage() {
             </p>
             <div className="docs-table">
               <HeaderRow name="Authorization" value="Bearer {API_KEY}" />
-              <HeaderRow name="X-Integration-Source" value="alcance_ia" />
+              <HeaderRow name="X-Integration-Source" value="alcance_ia ou geobot (credenciais independentes)" />
               <HeaderRow
                 name="X-Request-Id"
                 value="Identificador único de 8–100 caracteres"
@@ -246,7 +246,7 @@ export default async function DocsPage() {
               <HeaderRow name="X-Signature" value="sha256={HMAC_HEX}" />
               <HeaderRow
                 name="Content-Type"
-                value="application/json · apenas POST"
+                value="application/json · POST e PATCH"
               />
             </div>
             <Callout title="Mapeamento dos segredos">
@@ -256,6 +256,16 @@ export default async function DocsPage() {
               <code>ENCURTA_HMAC_SECRET</code>.
             </Callout>
           </Section>
+          <Callout title="Credenciais exclusivas da Geobot">
+            Para a fonte <code>geobot</code>, configure <code>GEOBOT_API_KEY</code>
+            {" "}e <code>GEOBOT_HMAC_SECRET</code> no Encurta.io. O frontend Geobot
+            usa os mesmos valores em <code>ENCURTA_API_KEY</code> e
+            {" "}<code>ENCURTA_HMAC_SECRET</code>, somente no servidor.
+            Não reutilize as credenciais do Alcance. Links, limites e request IDs
+            são separados por integração; nenhuma pode consultar ou alterar os
+            links da outra. Os exemplos abaixo usam Alcance; para a Geobot,
+            substitua a fonte e use suas próprias credenciais.
+          </Callout>
           <Section id="assinatura" number="03" title="Assinatura HMAC-SHA256">
             <p>
               Assine o corpo bruto exatamente como será enviado. O conteúdo

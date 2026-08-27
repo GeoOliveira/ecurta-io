@@ -1,3 +1,4 @@
+import type { IntegrationSource } from "../config";
 import "server-only";
 import { createHash } from "node:crypto";
 import { getServiceClient } from "@/lib/supabase/server";
@@ -63,11 +64,12 @@ export async function getIntegrationSettings() {
 export async function createInternalLink(
   input: CreateInternalLinkInput,
   requestId: string,
+  source: IntegrationSource = "alcance_ia",
 ) {
   const { db, settings } = await getIntegrationSettings();
-  if (!value(settings, "integrations.alcance_ia.enabled", false))
+  if (!value(settings, `integrations.${source}.enabled`, false))
     throw new InternalApiError("INTEGRATION_DISABLED", 403);
-  if (!value(settings, "integrations.alcance_ia.creation_enabled", false))
+  if (!value(settings, `integrations.${source}.creation_enabled`, false))
     throw new InternalApiError("CREATION_DISABLED", 403);
   if (input.externalRequestId && input.externalRequestId !== requestId)
     throw new InternalApiError("IDEMPOTENCY_CONFLICT", 409);
@@ -78,14 +80,10 @@ export async function createInternalLink(
       message: input.message,
       expiresAt: input.expiresAt,
       maximumMessageLength: Number(
-        value(settings, "integrations.alcance_ia.maximum_message_length", 1000),
+        value(settings, `integrations.${source}.maximum_message_length`, 1000),
       ),
       maximumExpirationDays: Number(
-        value(
-          settings,
-          "integrations.alcance_ia.maximum_expiration_days",
-          3650,
-        ),
+        value(settings, `integrations.${source}.maximum_expiration_days`, 3650),
       ),
     });
   } catch (error) {
@@ -105,7 +103,9 @@ export async function createInternalLink(
         ),
       );
     const { data, error } = await db.rpc(
-      "create_internal_whatsapp_short_link",
+      source === "geobot"
+        ? "create_geobot_whatsapp_short_link"
+        : "create_internal_whatsapp_short_link",
       {
         p_request_id: requestId,
         p_payload_hash: hash,
@@ -132,9 +132,12 @@ export async function createInternalLink(
   }
   throw new InternalApiError("SERVICE_UNAVAILABLE", 503, true);
 }
-export async function getInternalLink(id: string) {
+export async function getInternalLink(
+  id: string,
+  source: IntegrationSource = "alcance_ia",
+) {
   const { db, settings } = await getIntegrationSettings();
-  if (!value(settings, "integrations.alcance_ia.enabled", false))
+  if (!value(settings, `integrations.${source}.enabled`, false))
     throw new InternalApiError("INTEGRATION_DISABLED", 403);
   const { data, error } = await db
     .from("short_links")
@@ -146,7 +149,7 @@ export async function getInternalLink(id: string) {
     .maybeSingle();
   if (error) throw new InternalApiError("SERVICE_UNAVAILABLE", 503, true);
   if (!data) throw new InternalApiError("LINK_NOT_FOUND", 404);
-  if (data.integration_source !== "alcance_ia")
+  if (data.integration_source !== source)
     throw new InternalApiError("INTEGRATION_LINK_ACCESS_DENIED", 403);
   return { data: toData(data), db };
 }
@@ -155,18 +158,24 @@ export async function updateInternalLink(
   id: string,
   input: UpdateInternalLinkInput,
   requestId: string,
+  source: IntegrationSource = "alcance_ia",
 ) {
   const { db, settings } = await getIntegrationSettings();
-  if (!value(settings, "integrations.alcance_ia.enabled", false))
+  if (!value(settings, `integrations.${source}.enabled`, false))
     throw new InternalApiError("INTEGRATION_DISABLED", 403);
-  if (!value(settings, "integrations.alcance_ia.creation_enabled", false))
+  if (!value(settings, `integrations.${source}.creation_enabled`, false))
     throw new InternalApiError("CREATION_DISABLED", 403);
 
-  const { data, error } = await db.rpc("update_internal_link_slug", {
-    p_link_id: id,
-    p_slug: input.slug,
-    p_request_id: requestId,
-  });
+  const { data, error } = await db.rpc(
+    source === "geobot"
+      ? "update_geobot_link_slug"
+      : "update_internal_link_slug",
+    {
+      p_link_id: id,
+      p_slug: input.slug,
+      p_request_id: requestId,
+    },
+  );
   if (error?.code === "23505")
     throw new InternalApiError("SLUG_UNAVAILABLE", 409);
   if (error) throw new InternalApiError("SERVICE_UNAVAILABLE", 503, true);

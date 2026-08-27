@@ -13,7 +13,9 @@ export async function enforceIntegrationRateLimit(
   method = "GET",
 ) {
   const { data, error } = await db.rpc(
-    "check_and_record_integration_rate_limit_v2",
+    source === "geobot"
+      ? "check_and_record_geobot_rate_limit"
+      : "check_and_record_integration_rate_limit_v2",
     {
       p_source: source,
       p_endpoint: endpoint,
@@ -26,12 +28,14 @@ export async function enforceIntegrationRateLimit(
   );
   if (error) throw new InternalApiError("SERVICE_UNAVAILABLE", 503, true);
   const row = (
-    data as {
-      allowed: boolean;
-      limit_value: number;
-      remaining: number;
-      reset_at: number;
-    }[] | null
+    data as
+      | {
+          allowed: boolean;
+          limit_value: number;
+          remaining: number;
+          reset_at: number;
+        }[]
+      | null
   )?.[0];
   if (!row) throw new InternalApiError("SERVICE_UNAVAILABLE", 503, true);
   if (!row.allowed)
