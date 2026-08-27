@@ -154,7 +154,7 @@ export default async function DocsPage() {
             </h1>
             <p>
               Contrato oficial para criação segura e idempotente de links curtos
-              do WhatsApp entre backends autorizados.
+              de WhatsApp e de sites públicos entre backends autorizados.
             </p>
             <div className="docs-badges">
               <span>
@@ -265,6 +265,14 @@ export default async function DocsPage() {
             são separados por integração; nenhuma pode consultar ou alterar os
             links da outra. Os exemplos abaixo usam Alcance; para a Geobot,
             substitua a fonte e use suas próprias credenciais.
+          </Callout>
+          <Callout title="Encurtador global da Geobot">
+            A fonte <code>geobot</code> também aceita <code>destinationType: url</code>
+            {" "}com <code>destinationUrl</code>, sem os campos phone e message.
+            Use um endereço público HTTP ou HTTPS com até 4.096 caracteres.
+            Caminho, parâmetros e fragmento são preservados. URLs com credenciais,
+            hosts locais, IPs privados e links do próprio encurta.io são recusados.
+            O contrato WhatsApp do Alcance permanece inalterado.
           </Callout>
           <Section id="assinatura" number="03" title="Assinatura HMAC-SHA256">
             <p>

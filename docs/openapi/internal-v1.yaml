@@ -1,10 +1,10 @@
 openapi: 3.1.0
 info: {title: Encurta.io Internal API, version: 1.0.0, description: API privada server-to-server com Bearer e HMAC-SHA256.}
-servers: [{url: https://encurta.io}]
+servers: [{url: https://www.encurta.io}]
 paths:
   /api/internal/v1/links:
     post:
-      summary: Cria link curto de WhatsApp
+      summary: Cria link curto de WhatsApp ou URL pública (URL somente para Geobot)
       security: [{bearerAuth: []}]
       parameters:
         - {$ref: '#/components/parameters/RequestId'}
@@ -63,9 +63,27 @@ components:
     RequestId: {name: X-Request-Id, in: header, required: true, schema: {type: string, minLength: 8, maxLength: 100}}
     Timestamp: {name: X-Timestamp, in: header, required: true, schema: {type: string, format: date-time}}
     Signature: {name: X-Signature, in: header, required: true, schema: {type: string}}
-    Source: {name: X-Integration-Source, in: header, required: true, schema: {type: string, const: alcance_ia}}
+    Source: {name: X-Integration-Source, in: header, required: true, schema: {type: string, enum: [alcance_ia, geobot]}}
   schemas:
     CreateLink:
+      oneOf:
+        - {$ref: '#/components/schemas/CreateWhatsAppLink'}
+        - {$ref: '#/components/schemas/CreateUrlLink'}
+    CreateUrlLink:
+      type: object
+      description: Somente para X-Integration-Source geobot. HTTP/HTTPS públicos; preserva query e fragmento.
+      additionalProperties: false
+      required: [destinationType, destinationUrl]
+      properties:
+        destinationType: {type: string, const: url}
+        destinationUrl: {type: string, format: uri, minLength: 1, maxLength: 4096}
+        slug: {type: string, pattern: '^[A-Za-z0-9]{4,32}$'}
+        expiresAt: {type: [string, 'null'], format: date-time}
+        externalUserId: {type: [string, 'null'], maxLength: 100}
+        externalResourceId: {type: [string, 'null'], maxLength: 100}
+        externalRequestId: {type: string, minLength: 8, maxLength: 100}
+        metadata: {type: object, additionalProperties: false, properties: {accessLevel: {enum: [anonymous, public, free, premium, admin]}}}
+    CreateWhatsAppLink:
       type: object
       additionalProperties: false
       required: [destinationType, phone]

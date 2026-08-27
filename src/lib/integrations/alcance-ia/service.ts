@@ -9,22 +9,23 @@ import {
   normalizeSlugLength,
 } from "@/lib/short-links/slug";
 import { prepareWhatsAppShortLink } from "@/lib/short-links/service";
+import { normalizePublicUrl } from "@/lib/short-links/public-url.mjs";
 import { normalizeBrazilianPhone } from "@/lib/whatsapp";
 import { InternalApiError } from "./errors";
 import type {
-  CreateInternalLinkInput,
+  CreateGeobotLinkInput,
   UpdateInternalLinkInput,
 } from "./schemas";
 import type { InternalLinkData } from "./types";
 type SettingMap = Map<string, unknown>;
 const value = <T>(settings: SettingMap, key: string, fallback: T) =>
   settings.has(key) ? (settings.get(key) as T) : fallback;
-function stablePayloadHash(input: CreateInternalLinkInput) {
+function stablePayloadHash(input: CreateGeobotLinkInput) {
   const canonical = {
     destinationType: input.destinationType,
-    phone: normalizeBrazilianPhone(input.phone),
+    ...(input.destinationType === "whatsapp" ? { phone: normalizeBrazilianPhone(input.phone) } : { destinationUrl: normalizePublicUrl(input.destinationUrl) }),
     slug: input.slug ?? null,
-    message: input.message?.normalize("NFC").trim() || null,
+    ...(input.destinationType === "whatsapp" ? { message: input.message?.normalize("NFC").trim() || null } : {}),
     expiresAt: input.expiresAt ? new Date(input.expiresAt).toISOString() : null,
     externalUserId: input.externalUserId ?? null,
     externalResourceId: input.externalResourceId ?? null,
@@ -37,7 +38,7 @@ function toData(row: Record<string, unknown>): InternalLinkData {
     id: String(row.link_id ?? row.id),
     slug: String(row.slug),
     shortUrl: `${getShortDomain()}/${row.slug}`,
-    destinationType: "whatsapp",
+    destinationType: row.destination_type === "url" ? "url" : "whatsapp",
     status: String(row.link_status ?? row.status),
     expiresAt: row.expires_at ? String(row.expires_at) : null,
     createdAt: String(row.created_at),
@@ -62,10 +63,12 @@ export async function getIntegrationSettings() {
   };
 }
 export async function createInternalLink(
-  input: CreateInternalLinkInput,
+  input: CreateGeobotLinkInput,
   requestId: string,
   source: IntegrationSource = "alcance_ia",
 ) {
+  if (input.destinationType === "url" && source !== "geobot")
+    throw new InternalApiError("VALIDATION_ERROR", 422);
   const { db, settings } = await getIntegrationSettings();
   if (!value(settings, `integrations.${source}.enabled`, false))
     throw new InternalApiError("INTEGRATION_DISABLED", 403);
@@ -75,7 +78,18 @@ export async function createInternalLink(
     throw new InternalApiError("IDEMPOTENCY_CONFLICT", 409);
   let prepared;
   try {
-    prepared = prepareWhatsAppShortLink({
+    if (input.destinationType === "url") {
+      const destinationUrl = normalizePublicUrl(input.destinationUrl);
+      let expiresAt: string | null = null;
+      if (input.expiresAt) {
+        const date = new Date(input.expiresAt);
+        const maxDays = Number(value(settings, `integrations.${source}.maximum_expiration_days`, 3650));
+        if (!Number.isFinite(date.getTime()) || date.getTime() <= Date.now() || date.getTime() > Date.now() + maxDays * 86400000)
+          throw new Error("INVALID_EXPIRATION");
+        expiresAt = date.toISOString();
+      }
+      prepared = { destinationUrl, expiresAt };
+    } else prepared = prepareWhatsAppShortLink({
       phone: input.phone,
       message: input.message,
       expiresAt: input.expiresAt,
@@ -91,7 +105,7 @@ export async function createInternalLink(
       throw new InternalApiError("INVALID_EXPIRATION", 422);
     if (error instanceof Error && error.message === "INVALID_MESSAGE")
       throw new InternalApiError("VALIDATION_ERROR", 422);
-    throw new InternalApiError("INVALID_PHONE", 422);
+    throw new InternalApiError(input.destinationType === "url" ? "VALIDATION_ERROR" : "INVALID_PHONE", 422);
   }
   const hash = stablePayloadHash(input);
   for (let attempt = 0; attempt < 10; attempt++) {
@@ -104,7 +118,7 @@ export async function createInternalLink(
       );
     const { data, error } = await db.rpc(
       source === "geobot"
-        ? "create_geobot_whatsapp_short_link"
+        ? input.destinationType === "url" ? "create_geobot_url_short_link" : "create_geobot_whatsapp_short_link"
         : "create_internal_whatsapp_short_link",
       {
         p_request_id: requestId,
@@ -128,7 +142,7 @@ export async function createInternalLink(
       throw new InternalApiError("IDEMPOTENCY_CONFLICT", 409);
     if (row.result === "processing")
       throw new InternalApiError("SERVICE_UNAVAILABLE", 503, true);
-    return { data: toData(row), replay: row.result === "replay", db };
+    return { data: toData({ ...row, destination_type: input.destinationType }), replay: row.result === "replay", db };
   }
   throw new InternalApiError("SERVICE_UNAVAILABLE", 503, true);
 }
@@ -142,7 +156,7 @@ export async function getInternalLink(
   const { data, error } = await db
     .from("short_links")
     .select(
-      "id,slug,status,expires_at,created_at,last_accessed_at,click_count,integration_source",
+      "id,slug,status,expires_at,created_at,last_accessed_at,click_count,integration_source,destination_type",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -185,5 +199,7 @@ export async function updateInternalLink(
     throw new InternalApiError("LINK_NOT_FOUND", 404);
   if (row.result === "denied")
     throw new InternalApiError("INTEGRATION_LINK_ACCESS_DENIED", 403);
-  return { data: toData(row), changed: row.result === "updated", db };
+  // Legacy update RPCs retain their signatures; read the immutable type after ownership validation.
+  const destinationType = source === "geobot" ? (await getInternalLink(id, source)).data.destinationType : "whatsapp";
+  return { data: toData({ ...row, destination_type: destinationType }), changed: row.result === "updated", db };
 }

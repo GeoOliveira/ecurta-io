@@ -29,6 +29,7 @@ const row = {
   expires_at: null,
 };
 let owner = "geobot";
+let destinationType = "whatsapp";
 let flags: Record<string, unknown>;
 let events: Record<string, unknown>[];
 
@@ -85,6 +86,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(console, "info").mockImplementation(() => {});
   owner = "geobot";
+  destinationType = "whatsapp";
   events = [];
   flags = {};
   for (const [source, prefix] of [
@@ -119,7 +121,7 @@ beforeEach(() => {
           eq: () => ({
             is: () => ({
               maybeSingle: async () => ({
-                data: { ...row, integration_source: owner },
+                data: { ...row, integration_source: owner, destination_type: destinationType },
                 error: null,
               }),
             }),
@@ -148,6 +150,34 @@ afterEach(() => {
 });
 
 describe("isolated Geobot integration", () => {
+  it.each(['https://example.com/product?a=1&a=2#details', 'http://example.org/', 'https://münich.de/ação', 'https://wa.me/5511999999999?text=Oi'])("accepts global Geobot destination %s without changing Alcance", async (destinationUrl) => {
+    const body = JSON.stringify({ destinationType: 'url', destinationUrl });
+    const response = await POST(request('POST', 'geobot', body));
+    expect(response.status).toBe(201);
+    expect((await response.json()).data.destinationType).toBe('url');
+    expect(mocks.rpc.mock.calls[1][0]).toBe('create_geobot_url_short_link');
+    expect(mocks.rpc.mock.calls[1][1].p_destination_url).toBe(new URL(destinationUrl).toString());
+    mocks.rpc.mockClear();
+    expect((await POST(request('POST', 'alcance_ia', body))).status).toBe(422);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+  it.each(['javascript:alert(1)', 'https://localhost', 'http://127.1', 'https://user:pass@example.com', 'https://encurta.io/ABCD'])("rejects invalid Geobot destination %s before quota", async (destinationUrl) => {
+    expect((await POST(request('POST', 'geobot', JSON.stringify({ destinationType: 'url', destinationUrl })))).status).toBe(422);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+  it('returns the URL type on GET and PATCH', async () => {
+    destinationType = 'url';
+    expect((await (await GET(request('GET'), context())).json()).data.destinationType).toBe('url');
+    expect((await (await PATCH(request('PATCH'), context())).json()).data.destinationType).toBe('url');
+  });
+  it('hashes the full URL, including its fragment and query', async () => {
+    const hashes = [];
+    for (const destinationUrl of ['https://example.com/?a=1#one', 'https://example.com/?a=2#one', 'https://example.com/?a=1#two']) {
+      await POST(request('POST', 'geobot', JSON.stringify({ destinationType: 'url', destinationUrl })));
+      hashes.push(mocks.rpc.mock.calls.at(-1)?.[1].p_payload_hash);
+    }
+    expect(new Set(hashes).size).toBe(3);
+  });
   it("is disabled by default and accepts blank optional configuration", () => {
     vi.stubEnv("GEOBOT_INTEGRATION_ENABLED", undefined);
     vi.stubEnv("GEOBOT_API_KEY", "");

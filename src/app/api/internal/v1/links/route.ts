@@ -5,7 +5,7 @@ import {
   errorResponse,
   responseHeaders,
 } from "@/lib/integrations/alcance-ia/errors";
-import { createInternalLinkSchema } from "@/lib/integrations/alcance-ia/schemas";
+import { createInternalLinkSchema, createGeobotLinkSchema } from "@/lib/integrations/alcance-ia/schemas";
 import {
   createInternalLink,
   getIntegrationSettings,
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     } catch {
       throw new InternalApiError("VALIDATION_ERROR", 400);
     }
-    const parsed = createInternalLinkSchema.safeParse(json);
+    const parsed = (source === "geobot" ? createGeobotLinkSchema : createInternalLinkSchema).safeParse(json);
     if (!parsed.success)
       throw new InternalApiError(
         "VALIDATION_ERROR",

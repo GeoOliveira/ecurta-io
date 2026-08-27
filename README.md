@@ -1,6 +1,6 @@
 # Encurta.io
 
-Serviço independente de links curtos para destinos de WhatsApp autorizados.
+Serviço independente de links curtos para WhatsApp e URLs públicas HTTP/HTTPS da integração Geobot.
 
 ## Desenvolvimento
 
