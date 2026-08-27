@@ -1,0 +1,88 @@
+openapi: 3.1.0
+info: {title: Encurta.io Internal API, version: 1.0.0, description: API privada server-to-server com Bearer e HMAC-SHA256.}
+servers: [{url: https://encurta.io}]
+paths:
+  /api/internal/v1/links:
+    post:
+      summary: Cria link curto de WhatsApp
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/RequestId'}
+        - {$ref: '#/components/parameters/Timestamp'}
+        - {$ref: '#/components/parameters/Signature'}
+        - {$ref: '#/components/parameters/Source'}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CreateLink'}}}}
+      responses:
+        '201': {description: Criado}
+        '200': {description: Replay idempotente}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '413': {$ref: '#/components/responses/Error'}
+        '415': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  /api/internal/v1/links/{id}:
+    get:
+      summary: Consulta link da integração
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {$ref: '#/components/parameters/RequestId'}
+        - {$ref: '#/components/parameters/Timestamp'}
+        - {$ref: '#/components/parameters/Signature'}
+        - {$ref: '#/components/parameters/Source'}
+      responses: {'200': {description: OK}, '401': {$ref: '#/components/responses/Error'}, '403': {$ref: '#/components/responses/Error'}, '404': {$ref: '#/components/responses/Error'}}
+    patch:
+      summary: Altera o slug de um link da integração
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {$ref: '#/components/parameters/RequestId'}
+        - {$ref: '#/components/parameters/Timestamp'}
+        - {$ref: '#/components/parameters/Signature'}
+        - {$ref: '#/components/parameters/Source'}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/UpdateLink'}}}}
+      responses:
+        '200': {description: Slug persistido ou já presente no link}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '413': {$ref: '#/components/responses/Error'}
+        '415': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+components:
+  securitySchemes: {bearerAuth: {type: http, scheme: bearer}}
+  parameters:
+    RequestId: {name: X-Request-Id, in: header, required: true, schema: {type: string, minLength: 8, maxLength: 100}}
+    Timestamp: {name: X-Timestamp, in: header, required: true, schema: {type: string, format: date-time}}
+    Signature: {name: X-Signature, in: header, required: true, schema: {type: string}}
+    Source: {name: X-Integration-Source, in: header, required: true, schema: {type: string, const: alcance_ia}}
+  schemas:
+    CreateLink:
+      type: object
+      additionalProperties: false
+      required: [destinationType, phone]
+      properties:
+        destinationType: {type: string, const: whatsapp}
+        phone: {type: string, maxLength: 32}
+        slug: {type: string, pattern: '^[A-Za-z0-9]{4,32}$', description: Opcional; não pode usar uma rota reservada}
+        message: {type: string}
+        expiresAt: {type: [string, 'null'], format: date-time}
+        externalUserId: {type: [string, 'null'], maxLength: 100}
+        externalResourceId: {type: [string, 'null'], maxLength: 100}
+        metadata: {type: object, additionalProperties: false, properties: {accessLevel: {enum: [anonymous, public, free, premium, admin]}}}
+    UpdateLink:
+      type: object
+      additionalProperties: false
+      required: [slug]
+      properties:
+        slug: {type: string, pattern: '^[A-Za-z0-9]{4,32}$', description: Não pode usar uma rota reservada}
+  responses:
+    Error: {description: Erro padronizado sem detalhes internos}

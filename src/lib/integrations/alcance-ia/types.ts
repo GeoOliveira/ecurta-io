@@ -1,0 +1,4 @@
+export type AccessLevel="anonymous"|"public"|"free"|"premium"|"admin";
+export type InternalLinkData={id:string;slug:string;shortUrl:string;destinationType:"whatsapp";status:string;expiresAt:string|null;createdAt:string;lastAccessedAt?:string|null;clickCount?:number};
+export type InternalApiErrorCode="INTEGRATION_DISABLED"|"UNAUTHORIZED"|"INVALID_SIGNATURE"|"REQUEST_EXPIRED"|"INVALID_REQUEST_ID"|"INVALID_CONTENT_TYPE"|"PAYLOAD_TOO_LARGE"|"VALIDATION_ERROR"|"INVALID_PHONE"|"INVALID_EXPIRATION"|"RATE_LIMIT_EXCEEDED"|"IDEMPOTENCY_CONFLICT"|"SLUG_UNAVAILABLE"|"LINK_NOT_FOUND"|"INTEGRATION_LINK_ACCESS_DENIED"|"CREATION_DISABLED"|"SERVICE_UNAVAILABLE"|"INTERNAL_ERROR";
+export type InternalApiErrorResponse={error:{code:InternalApiErrorCode;message:string;retryable:boolean;details?:Record<string,string[]>};meta:{requestId:string|null}};

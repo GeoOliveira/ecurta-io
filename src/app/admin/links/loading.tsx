@@ -1,0 +1,1 @@
+export default function LinksLoading(){return <main className="admin-main" aria-label="Carregando links"><div className="skeleton skeleton-line" style={{width:220}}/><div className="skeleton" style={{height:72,borderRadius:12,marginTop:30}}/><div className="skeleton" style={{height:360,borderRadius:12,marginTop:16}}/></main>}

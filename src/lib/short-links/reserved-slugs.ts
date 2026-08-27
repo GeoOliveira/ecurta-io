@@ -1,1 +1,21 @@
-export const RESERVED_SLUGS=new Set(["admin","api","login","logout","conta","dashboard","suporte","termos","privacidade","denunciar","favicon.ico","robots.txt","sitemap.xml","manifest.json","link-nao-encontrado","link-expirado","link-bloqueado","erro"]);
+export const RESERVED_SLUGS = new Set([
+  "admin",
+  "api",
+  "docs",
+  "login",
+  "logout",
+  "conta",
+  "dashboard",
+  "suporte",
+  "termos",
+  "privacidade",
+  "denunciar",
+  "favicon.ico",
+  "robots.txt",
+  "sitemap.xml",
+  "manifest.json",
+  "link-nao-encontrado",
+  "link-expirado",
+  "link-bloqueado",
+  "erro",
+]);

@@ -1,2 +1,44 @@
-import{describe,it,expect}from"vitest";import{generateShortSlug,isValidSlug}from"../src/lib/short-links/slug";import{generateWhatsAppDestination,validateBrazilianPhone}from"../src/lib/whatsapp";import{validateDestinationUrl}from"../src/lib/short-links/destination";
-describe("short links",()=>{it("generates secure-shaped slugs",()=>expect(generateShortSlug()).toMatch(/^[A-Za-z0-9]{8}$/));it("rejects reserved slugs",()=>expect(isValidSlug("dashboard")).toBe(false));it("validates a WhatsApp destination",()=>expect(validateDestinationUrl("https://wa.me/5571999999999?text=Oi")).toBe(true));it("blocks hostile hosts",()=>expect(validateDestinationUrl("https://wa.me.evil.test/5571999999999")).toBe(false))});describe("Brazilian phone",()=>{it("normalizes and encodes a message",()=>{const result=generateWhatsAppDestination({phone:"(71) 99999-9999",message:"Olá & bem-vindo"});expect(result.normalizedPhone).toBe("5571999999999");expect(result.destinationUrl).toContain("text=Ol%C3%A1");});it("rejects invalid area codes",()=>expect(validateBrazilianPhone("00999999999")).toBe(false))});
+import { describe, it, expect } from "vitest";
+import {
+  generateShortSlug,
+  getSlugCapacity,
+  getSlugExpansionThreshold,
+  isValidSlug,
+} from "../src/lib/short-links/slug";
+import {
+  generateWhatsAppDestination,
+  validateBrazilianPhone,
+} from "../src/lib/whatsapp";
+import { validateDestinationUrl } from "../src/lib/short-links/destination";
+describe("short links", () => {
+  it("generates secure-shaped slugs", () =>
+    expect(generateShortSlug()).toMatch(/^[A-Za-z0-9]{4}$/));
+  it("rejects reserved slugs", () =>
+    expect(isValidSlug("dashboard")).toBe(false));
+  it("supports four-character links", () =>
+    expect(isValidSlug("B7xK")).toBe(true));
+  it("calculates capacity and the preventive expansion point", () => {
+    expect(getSlugCapacity(4)).toBe(BigInt(14_776_334));
+    expect(getSlugExpansionThreshold(4)).toBe(BigInt(1_477_633));
+  });
+  it("validates a WhatsApp destination", () =>
+    expect(validateDestinationUrl("https://wa.me/5571999999999?text=Oi")).toBe(
+      true,
+    ));
+  it("blocks hostile hosts", () =>
+    expect(
+      validateDestinationUrl("https://wa.me.evil.test/5571999999999"),
+    ).toBe(false));
+});
+describe("Brazilian phone", () => {
+  it("normalizes and encodes a message", () => {
+    const result = generateWhatsAppDestination({
+      phone: "(71) 99999-9999",
+      message: "Olá & bem-vindo",
+    });
+    expect(result.normalizedPhone).toBe("5571999999999");
+    expect(result.destinationUrl).toContain("text=Ol%C3%A1");
+  });
+  it("rejects invalid area codes", () =>
+    expect(validateBrazilianPhone("00999999999")).toBe(false));
+});

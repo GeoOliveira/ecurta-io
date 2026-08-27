@@ -1,0 +1,4 @@
+import "server-only";
+import type{SupabaseClient}from"@supabase/supabase-js";
+export async function recordIntegrationEvent(db:SupabaseClient,input:{requestId:string;endpoint:string;method:string;statusCode:number;action:string;durationMs:number;shortLinkId?:string|null;externalUserId?:string|null;errorCode?:string|null}){await db.from("integration_api_events").insert({integration_source:"alcance_ia",request_id:input.requestId,endpoint:input.endpoint,method:input.method,status_code:input.statusCode,action:input.action,duration_ms:input.durationMs,short_link_id:input.shortLinkId??null,external_user_id:input.externalUserId??null,error_code:input.errorCode??null})}
+export function safeTechnicalLog(input:{requestId:string;endpoint:string;status:number;durationMs:number;code?:string;linkId?:string;replay?:boolean}){console.info("internal_api",input)}
