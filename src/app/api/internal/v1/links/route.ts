@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     const rawBody = await request.text();
     if (Buffer.byteLength(rawBody, "utf8") > config.maxBodyBytes)
       throw new InternalApiError("PAYLOAD_TOO_LARGE", 413);
-    const auth = authenticateIntegrationRequest(request, rawBody, config);
+    const auth = await authenticateIntegrationRequest(request, rawBody, config);
     requestId = auth.requestId;
     let json: unknown;
     try {
