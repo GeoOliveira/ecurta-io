@@ -7,7 +7,8 @@ import {
   Plus,
   ShieldCheck,
 } from "lucide-react";
-import { getShortDomain } from "@/lib/config";
+import { getAllowedShortDomains, getDefaultShortDomain } from "@/lib/config";
+import { getServiceClient } from "@/lib/supabase/server";
 import { createShortLinkAction } from "../actions";
 export default async function NewLinkPage({
   searchParams,
@@ -15,6 +16,13 @@ export default async function NewLinkPage({
   searchParams: Promise<{ erro?: string }>;
 }) {
   const { erro } = await searchParams;
+  const db = getServiceClient();
+  const { data: settings } = db
+    ? await db.from("app_settings").select("key,value").in("key", ["shortener.domain", "shortener.allowed_domains"])
+    : { data: null };
+  const values = new Map((settings ?? []).map((setting) => [setting.key, setting.value]));
+  const allowedDomains = getAllowedShortDomains(values.get("shortener.allowed_domains"));
+  const defaultDomain = getDefaultShortDomain(allowedDomains, values.get("shortener.domain"));
   return (
     <main className="admin-main">
       <div className="admin-page-head">
@@ -80,6 +88,13 @@ export default async function NewLinkPage({
             rows={3}
             placeholder="Identificação visível somente no painel"
           />
+          <label htmlFor="shortDomain">Domínio do link</label>
+          <select id="shortDomain" name="shortDomain" defaultValue={defaultDomain}>
+            {allowedDomains.map((domain) => (
+              <option key={domain} value={domain}>{domain.replace("https://", "")}</option>
+            ))}
+          </select>
+          <p className="field-help">A escolha fica registrada neste link.</p>
           {erro && (
             <p className="form-error" role="alert">
               {erro}
@@ -95,7 +110,7 @@ export default async function NewLinkPage({
           <div className="preview-url">
             <small>Link curto</small>
             <strong>
-              {getShortDomain()}/<b>B7xK</b>
+              encurta.io ou curto.ink/<b>B7xK</b>
             </strong>
           </div>
           <ul>

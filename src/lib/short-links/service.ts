@@ -7,6 +7,7 @@ import {
   normalizeSlugLength,
 } from "./slug";
 import { generateWhatsAppDestination } from "@/lib/whatsapp";
+import { getAllowedShortDomains, getDefaultShortDomain, getShortDomain, normalizeShortDomain } from "@/lib/config";
 
 export type PreparedWhatsAppLink = {
   destinationUrl: string;
@@ -55,21 +56,26 @@ export async function createAdministrativeWhatsAppShortLink(input: {
   note?: string | null;
   createdBy: string;
   slugLength?: number;
+  shortDomain?: string;
 }) {
   const db = getServiceClient();
   if (!db) throw new Error("SERVICE_UNAVAILABLE");
   const prepared = prepareWhatsAppShortLink(input);
-  const { data: setting, error: settingError } =
+  const { data: settings, error: settingError } =
     input.slugLength === undefined
       ? await db
           .from("app_settings")
-          .select("value")
-          .eq("key", "shortener.slug_length")
-          .maybeSingle()
+          .select("key,value")
+          .in("key", ["shortener.slug_length", "shortener.domain", "shortener.allowed_domains"])
       : { data: null, error: null };
   if (settingError) throw new Error("PERSISTENCE_ERROR");
+  const settingsByKey = new Map((settings ?? []).map((setting) => [setting.key, setting.value]));
+  const allowedDomains = getAllowedShortDomains(settingsByKey.get("shortener.allowed_domains"));
+  const requestedDomain = input.shortDomain ? normalizeShortDomain(input.shortDomain) : null;
+  const shortDomain = requestedDomain ?? getDefaultShortDomain(allowedDomains, settingsByKey.get("shortener.domain") ?? getShortDomain());
+  if (!allowedDomains.includes(shortDomain)) throw new Error("INVALID_SHORT_DOMAIN");
   const slugLength = normalizeSlugLength(
-    input.slugLength ?? setting?.value ?? DEFAULT_SLUG_LENGTH,
+    input.slugLength ?? settingsByKey.get("shortener.slug_length") ?? DEFAULT_SLUG_LENGTH,
   );
   for (let attempt = 0; attempt < 10; attempt++) {
     const slug = generateShortSlug(slugLength);
@@ -81,9 +87,10 @@ export async function createAdministrativeWhatsAppShortLink(input: {
         created_by: input.createdBy,
         expires_at: prepared.expiresAt,
         metadata: { note: input.note || null },
+        short_domain: shortDomain,
         created_via: "admin",
       })
-      .select("id,slug")
+      .select("id,slug,short_domain")
       .single();
     if (!error && data) return data;
     if (error?.code !== "23505") throw new Error("PERSISTENCE_ERROR");

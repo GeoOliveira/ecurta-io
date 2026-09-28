@@ -3,9 +3,11 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getAdminSession } from "@/lib/auth";
 import { getServiceClient } from "@/lib/supabase/server";
+import { getAllowedShortDomains, normalizeShortDomain } from "@/lib/config";
 
 const schema = z.object({
   domain: z.url().refine((value) => value.startsWith("https://")),
+  allowedDomains: z.string().min(1).max(4000),
   slugLength: z.coerce.number().int().min(4).max(16),
   retention: z.coerce.number().int().min(1).max(365),
   maxMessage: z.coerce.number().int().min(100).max(2000),
@@ -24,11 +26,18 @@ export async function saveSettingsAction(formData: FormData) {
   const parsed = schema.safeParse(Object.fromEntries(formData));
   if (!parsed.success)
     redirect("/admin/configuracoes?erro=Revise+os+valores+informados");
+  const allowedDomains = getAllowedShortDomains(
+    parsed.data.allowedDomains.split(/[\n,]/).map((domain) => domain.trim()).filter(Boolean),
+  );
+  const primaryDomain = normalizeShortDomain(parsed.data.domain);
+  if (!allowedDomains.length || !primaryDomain || !allowedDomains.includes(primaryDomain))
+    redirect("/admin/configuracoes?erro=Informe+domínios+HTTPS+válidos+e+inclua+o+principal+na+lista");
   const db = getServiceClient();
   if (!db) redirect("/admin/configuracoes?erro=Banco+de+dados+indisponível");
   const settings = [
     { key: "shortener.enabled", value: Boolean(parsed.data.enabled) },
-    { key: "shortener.domain", value: parsed.data.domain },
+    { key: "shortener.domain", value: primaryDomain },
+    { key: "shortener.allowed_domains", value: allowedDomains },
     { key: "shortener.slug_length", value: parsed.data.slugLength },
     {
       key: "shortener.analytics_enabled",

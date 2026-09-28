@@ -2,6 +2,14 @@ openapi: 3.1.0
 info: {title: Encurta.io Internal API, version: 1.0.0, description: API privada server-to-server. Geobot usa Bearer API key; Alcance IA usa Bearer e HMAC-SHA256.}
 servers: [{url: https://www.encurta.io}]
 paths:
+  /api/internal/v1/domains:
+    get:
+      summary: Lista os domínios de encurtamento autorizados para a integração
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/RequestId'}
+        - {$ref: '#/components/parameters/Source'}
+      responses: {'200': {description: Domínios e domínio padrão}, '401': {$ref: '#/components/responses/Error'}, '403': {$ref: '#/components/responses/Error'}}
   /api/internal/v1/links:
     post:
       summary: Cria link curto de WhatsApp ou URL pública (URL somente para Geobot)
@@ -68,6 +76,7 @@ components:
       required: [destinationType, destinationUrl]
       properties:
         destinationType: {type: string, const: url}
+        shortDomain: {type: string, format: uri, description: Opcional. Deve constar em GET /api/internal/v1/domains.}
         destinationUrl: {type: string, format: uri, minLength: 1, maxLength: 4096}
         slug: {type: string, pattern: '^[A-Za-z0-9]{4,32}$'}
         expiresAt: {type: [string, 'null'], format: date-time}
@@ -82,6 +91,7 @@ components:
       properties:
         destinationType: {type: string, const: whatsapp}
         phone: {type: string, maxLength: 32}
+        shortDomain: {type: string, format: uri, description: Opcional. Deve constar em GET /api/internal/v1/domains.}
         slug: {type: string, pattern: '^[A-Za-z0-9]{4,32}$', description: Opcional; não pode usar uma rota reservada}
         message: {type: string}
         expiresAt: {type: [string, 'null'], format: date-time}

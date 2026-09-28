@@ -2,7 +2,7 @@ import type { IntegrationSource } from "../config";
 import "server-only";
 import { createHash } from "node:crypto";
 import { getServiceClient } from "@/lib/supabase/server";
-import { getShortDomain } from "@/lib/config";
+import { getAllowedShortDomains, getDefaultShortDomain, getShortDomain, normalizeShortDomain, type ShortDomain } from "@/lib/config";
 import {
   DEFAULT_SLUG_LENGTH,
   generateShortSlug,
@@ -26,6 +26,7 @@ function stablePayloadHash(input: CreateGeobotLinkInput) {
     ...(input.destinationType === "whatsapp" ? { phone: normalizeBrazilianPhone(input.phone) } : { destinationUrl: normalizePublicUrl(input.destinationUrl) }),
     slug: input.slug ?? null,
     ...(input.destinationType === "whatsapp" ? { message: input.message?.normalize("NFC").trim() || null } : {}),
+    shortDomain: input.shortDomain ?? null,
     expiresAt: input.expiresAt ? new Date(input.expiresAt).toISOString() : null,
     externalUserId: input.externalUserId ?? null,
     externalResourceId: input.externalResourceId ?? null,
@@ -34,10 +35,12 @@ function stablePayloadHash(input: CreateGeobotLinkInput) {
   return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
 function toData(row: Record<string, unknown>): InternalLinkData {
+  const shortDomain = normalizeShortDomain(row.short_domain) ?? getShortDomain();
   return {
     id: String(row.link_id ?? row.id),
     slug: String(row.slug),
-    shortUrl: `${getShortDomain()}/${row.slug}`,
+    shortUrl: `${shortDomain}/${row.slug}`,
+    shortDomain,
     destinationType: row.destination_type === "url" ? "url" : "whatsapp",
     status: String(row.link_status ?? row.status),
     expiresAt: row.expires_at ? String(row.expires_at) : null,
@@ -76,6 +79,10 @@ export async function createInternalLink(
     throw new InternalApiError("CREATION_DISABLED", 403);
   if (input.externalRequestId && input.externalRequestId !== requestId)
     throw new InternalApiError("IDEMPOTENCY_CONFLICT", 409);
+  const allowedDomains = getAllowedShortDomains(value(settings, "shortener.allowed_domains", undefined));
+  const requestedDomain = input.shortDomain ? normalizeShortDomain(input.shortDomain) : null;
+  const shortDomain = requestedDomain ?? getDefaultShortDomain(allowedDomains, value(settings, "shortener.domain", getShortDomain()));
+  if (!allowedDomains.includes(shortDomain)) throw new InternalApiError("VALIDATION_ERROR", 422);
   let prepared;
   try {
     if (input.destinationType === "url") {
@@ -142,7 +149,24 @@ export async function createInternalLink(
       throw new InternalApiError("IDEMPOTENCY_CONFLICT", 409);
     if (row.result === "processing")
       throw new InternalApiError("SERVICE_UNAVAILABLE", 503, true);
-    return { data: toData({ ...row, destination_type: input.destinationType }), replay: row.result === "replay", db };
+    let persistedDomain: ShortDomain = shortDomain;
+    if (row.result === "created") {
+      const { error: domainError } = await db
+        .from("short_links")
+        .update({ short_domain: shortDomain })
+        .eq("id", row.link_id);
+      if (domainError) throw new InternalApiError("SERVICE_UNAVAILABLE", 503, true);
+    } else {
+      const { data: persisted, error: persistedError } = await db
+        .from("short_links")
+        .select("short_domain")
+        .eq("id", row.link_id)
+        .maybeSingle();
+      if (persistedError || !persisted)
+        throw new InternalApiError("SERVICE_UNAVAILABLE", 503, true);
+      persistedDomain = normalizeShortDomain(persisted.short_domain) ?? getShortDomain();
+    }
+    return { data: toData({ ...row, short_domain: persistedDomain, destination_type: input.destinationType }), replay: row.result === "replay", db };
   }
   throw new InternalApiError("SERVICE_UNAVAILABLE", 503, true);
 }
@@ -156,7 +180,7 @@ export async function getInternalLink(
   const { data, error } = await db
     .from("short_links")
     .select(
-      "id,slug,status,expires_at,created_at,last_accessed_at,click_count,integration_source,destination_type",
+      "id,slug,status,expires_at,created_at,last_accessed_at,click_count,integration_source,destination_type,short_domain",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -199,7 +223,6 @@ export async function updateInternalLink(
     throw new InternalApiError("LINK_NOT_FOUND", 404);
   if (row.result === "denied")
     throw new InternalApiError("INTEGRATION_LINK_ACCESS_DENIED", 403);
-  // Legacy update RPCs retain their signatures; read the immutable type after ownership validation.
-  const destinationType = source === "geobot" ? (await getInternalLink(id, source)).data.destinationType : "whatsapp";
-  return { data: toData({ ...row, destination_type: destinationType }), changed: row.result === "updated", db };
+  const existing = await getInternalLink(id, source);
+  return { data: toData({ ...row, destination_type: existing.data.destinationType, short_domain: existing.data.shortDomain }), changed: row.result === "updated", db };
 }

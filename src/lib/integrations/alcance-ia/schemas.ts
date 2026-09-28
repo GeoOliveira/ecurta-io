@@ -16,6 +16,7 @@ export const createInternalLinkSchema = z.strictObject({
     .min(1)
     .max(32)
     .refine(validateBrazilianPhone, "Telefone inválido"),
+  shortDomain: z.string().max(100).optional(),
   slug: slugSchema.optional(),
   message: z.string().max(4000).optional(),
   expiresAt: z.iso.datetime({ offset: true }).nullable().optional(),
