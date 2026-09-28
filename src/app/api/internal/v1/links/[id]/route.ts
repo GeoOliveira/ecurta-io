@@ -58,7 +58,7 @@ export async function GET(request: Request, { params }: Context) {
   try {
     const config = getRequestIntegrationConfig(request);
     source = config.integration;
-    const auth = authenticateIntegrationRequest(request, "", config);
+    const auth = await authenticateIntegrationRequest(request, "", config);
     requestId = auth.requestId;
     const id = checkedId((await params).id);
     const loaded = await getIntegrationSettings();
@@ -145,7 +145,7 @@ export async function PATCH(request: Request, { params }: Context) {
     if (Buffer.byteLength(rawBody, "utf8") > config.maxBodyBytes)
       throw new InternalApiError("PAYLOAD_TOO_LARGE", 413);
 
-    const auth = authenticateIntegrationRequest(request, rawBody, config);
+    const auth = await authenticateIntegrationRequest(request, rawBody, config);
     requestId = auth.requestId;
     const id = checkedId((await params).id);
     let json: unknown;

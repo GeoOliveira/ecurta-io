@@ -117,17 +117,17 @@ describe("HMAC", () => {
 });
 
 describe("request authentication", () => {
-  it("authenticates all required headers", () =>
+  it("authenticates all required headers", async () =>
     expect(
-      authenticateIntegrationRequest(
+      (await authenticateIntegrationRequest(
         signedRequest(),
         '{"destinationType":"whatsapp","phone":"5571999999999"}',
         config,
-      ).source,
+      )).source,
     ).toBe("alcance_ia"));
-  it("rejects expired and future timestamps", () => {
+  it("rejects expired and future timestamps", async () => {
     const body = '{"destinationType":"whatsapp","phone":"5571999999999"}';
-    expect(() =>
+    await expect(
       authenticateIntegrationRequest(
         signedRequest(undefined, {
           timestamp: new Date(Date.now() - 600000).toISOString(),
@@ -135,8 +135,8 @@ describe("request authentication", () => {
         body,
         config,
       ),
-    ).toThrow("janela");
-    expect(() =>
+    ).rejects.toThrow("janela");
+    await expect(
       authenticateIntegrationRequest(
         signedRequest(undefined, {
           timestamp: new Date(Date.now() + 600000).toISOString(),
@@ -144,7 +144,7 @@ describe("request authentication", () => {
         body,
         config,
       ),
-    ).toThrow("janela");
+    ).rejects.toThrow("janela");
   });
   it("validates request IDs", () => {
     expect(isValidIntegrationRequestId("req_01JABCDEF")).toBe(true);
@@ -153,7 +153,7 @@ describe("request authentication", () => {
 });
 
 describe("production hosts", () => {
-  it("accepts the official www host", () => {
+  it("accepts the official www host", async () => {
     const body = '{"destinationType":"whatsapp","phone":"5571999999999"}';
     const timestamp = new Date().toISOString();
     const requestId = "req_www_host_123";
@@ -177,7 +177,7 @@ describe("production hosts", () => {
       },
       body,
     });
-    expect(authenticateIntegrationRequest(request, body, config).source).toBe(
+    expect((await authenticateIntegrationRequest(request, body, config)).source).toBe(
       "alcance_ia",
     );
   });
