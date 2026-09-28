@@ -67,16 +67,19 @@ function request(
         ].join("\n"),
       )
       .digest("hex");
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${credentials[signingSource].key}`,
+    "X-Integration-Source": source,
+    "X-Request-Id": requestId,
+  };
+  if (source === "alcance_ia") {
+    headers["X-Timestamp"] = timestamp;
+    headers["X-Signature"] = signature;
+  }
   return new Request(`https://www.encurta.io${path}`, {
     method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${credentials[signingSource].key}`,
-      "X-Integration-Source": source,
-      "X-Request-Id": requestId,
-      "X-Timestamp": timestamp,
-      "X-Signature": signature,
-    },
+    headers,
     ...(method !== "GET" ? { body: raw } : {}),
   });
 }
@@ -95,7 +98,8 @@ beforeEach(() => {
   ] as const) {
     vi.stubEnv(`${prefix}_INTEGRATION_ENABLED`, "true");
     vi.stubEnv(`${prefix}_API_KEY`, credentials[source].key);
-    vi.stubEnv(`${prefix}_HMAC_SECRET`, credentials[source].secret);
+    if (source === "alcance_ia")
+      vi.stubEnv(`${prefix}_HMAC_SECRET`, credentials[source].secret);
     flags[`integrations.${source}.enabled`] = true;
     flags[`integrations.${source}.creation_enabled`] = true;
   }
@@ -181,13 +185,12 @@ describe("isolated Geobot integration", () => {
   it("is disabled by default and accepts blank optional configuration", () => {
     vi.stubEnv("GEOBOT_INTEGRATION_ENABLED", undefined);
     vi.stubEnv("GEOBOT_API_KEY", "");
-    vi.stubEnv("GEOBOT_HMAC_SECRET", "");
     vi.stubEnv("GEOBOT_ALLOWED_ORIGIN", "");
     expect(getGeobotEnvConfig()).toMatchObject({
       enabled: false,
       apiKey: null,
-      hmacSecret: null,
       source: "geobot",
+      authMode: "bearer",
     });
   });
   it.each(["geobot", "alcance_ia"] as const)(
@@ -211,6 +214,22 @@ describe("isolated Geobot integration", () => {
       expect((await response.json()).data.slug).toBe("GeoTest");
     },
   );
+  it("accepts Geobot using only its bearer API key", async () => {
+    const req = request();
+    expect(req.headers.has("X-Timestamp")).toBe(false);
+    expect(req.headers.has("X-Signature")).toBe(false);
+    expect((await POST(req)).status).toBe(201);
+  });
+  it("rejects a missing or invalid Geobot API key before accessing the DB", async () => {
+    for (const authorization of [null, "Bearer invalid_geobot_api_key_value"]) {
+      const req = request();
+      if (authorization === null) req.headers.delete("Authorization");
+      else req.headers.set("Authorization", authorization);
+      expect((await POST(req)).status).toBe(401);
+    }
+    expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
   it.each(["geobot", "alcance_ia"] as const)(
     "rejects another client's credentials for %s before accessing the DB",
     async (source) => {

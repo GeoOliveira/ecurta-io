@@ -10,13 +10,10 @@ Operações: `POST /api/internal/v1/links`, `GET /api/internal/v1/links/{id}` e
 `PATCH /api/internal/v1/links/{id}`. JSON, HTTPS e `Cache-Control: no-store`.
 
 Headers obrigatórios: `Authorization: Bearer <chave>`,
-`X-Integration-Source: geobot`, `X-Request-Id` (8–100 caracteres),
-`X-Timestamp` (ISO 8601 UTC) e `X-Signature: sha256=<hex>`.
-A assinatura HMAC-SHA256 usa cinco linhas, sem newline final:
-timestamp, método HTTP, pathname, request ID e SHA256 do corpo bruto.
-No GET, o corpo assinado é a string vazia. Consulte o contrato completo em
-`docs/integracao-alcance-ia-api-privada.md`; substitua somente a identidade e
-as credenciais. Não substitua segredos do Alcance.
+`X-Integration-Source: geobot` e `X-Request-Id` (8–100 caracteres).
+Geobot autentica somente pela API key e não envia `X-Timestamp` nem
+`X-Signature`. O Alcance IA mantém o contrato Bearer + HMAC próprio; não
+reutilize a chave da Geobot nem altere suas credenciais.
 
 POST aceita dois formatos exclusivos:
 
@@ -45,15 +42,15 @@ com esse ID retornam 409. Primeira criação retorna 201. PATCH altera apenas sl
 | Encurta.io / Vercel | Geobot / Render |
 | --- | --- |
 | GEOBOT_API_KEY | ENCURTA_API_KEY (mesmo valor) |
-| GEOBOT_HMAC_SECRET | ENCURTA_HMAC_SECRET (mesmo valor) |
 | GEOBOT_INTEGRATION_ENABLED=true | ENCURTA_INTEGRATION_ENABLED=true |
 | — | ENCURTA_API_URL=https://www.encurta.io |
 | — | ENCURTA_INTEGRATION_SOURCE=geobot |
 | — | ENCURTA_HOURLY_LIMIT=100 |
 | — | REDIS_URL_SESSIONS já usado pelo frontend |
 
-Use valores criptograficamente aleatórios independentes para API key e HMAC.
-Nunca use `NEXT_PUBLIC_`, nunca envie segredos pelo navegador e nunca os comite.
+Gere uma API key criptograficamente aleatória, com ao menos 24 caracteres.
+Ela é a única credencial compartilhada com a Geobot. Nunca use `NEXT_PUBLIC_`,
+nunca envie segredos pelo navegador e nunca os comite.
 `GEOBOT_ALLOWED_ORIGIN` é opcional: o cliente server-to-server não envia Origin.
 Se enviado, Origin deve coincidir exatamente com a configuração.
 
@@ -79,8 +76,8 @@ orientação de nova tentativa. A interface pública não personaliza slugs aind
 
 ## Isolamento e implantação
 
-O header escolhe a configuração, mas só autenticação Bearer + HMAC válida
-autoriza o acesso. Fonte desconhecida não passa na autenticação.
+O header escolhe a configuração, mas só API key Bearer válida autoriza o acesso
+da Geobot. Fonte desconhecida não passa na autenticação.
 GET compara o proprietário; PATCH verifica a fonte dentro da transação SQL.
 As RPCs são executáveis apenas por `service_role`. A idempotência é única por
 `(integration_source, request_id)` e os eventos registram a integração correta.
