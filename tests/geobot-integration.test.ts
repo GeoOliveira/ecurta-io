@@ -121,8 +121,15 @@ beforeEach(() => {
       };
     if (table === "short_links")
       return {
+        update: () => ({
+          eq: async () => ({ error: null }),
+        }),
         select: () => ({
           eq: () => ({
+            maybeSingle: async () => ({
+              data: { ...row, short_domain: "https://encurta.io", integration_source: owner, destination_type: destinationType },
+              error: null,
+            }),
             is: () => ({
               maybeSingle: async () => ({
                 data: { ...row, integration_source: owner, destination_type: destinationType },
@@ -295,6 +302,7 @@ describe("isolated Geobot integration", () => {
   it.each(["geobot", "alcance_ia"] as const)(
     "updates %s through its source-restricted RPC",
     async (source) => {
+      owner = source;
       expect((await PATCH(request("PATCH", source), context())).status).toBe(
         200,
       );

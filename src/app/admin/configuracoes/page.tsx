@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { getServiceClient } from "@/lib/supabase/server";
 import { getAdminSession } from "@/lib/auth";
-import { getShortDomain } from "@/lib/config";
+import { getAllowedShortDomains, getShortDomain } from "@/lib/config";
 import {
   getAlcanceIaEnvConfig,
   integrationSecretsConfigured,
@@ -115,6 +115,18 @@ export default async function SettingsPage({
               value={String(value("shortener.domain", getShortDomain()))}
               disabled={!editable}
             />
+            <label className="setting-field">
+              <span>Domínios permitidos</span>
+              <small>shortener.allowed_domains</small>
+              <textarea
+                name="allowedDomains"
+                rows={4}
+                defaultValue={getAllowedShortDomains(value("shortener.allowed_domains", undefined)).join("\n")}
+                disabled={!editable}
+                required
+              />
+              <small>Um endereço HTTPS por linha. Integrações autorizadas passam a receber esta lista automaticamente.</small>
+            </label>
             <div className="impact-note">
               <AlertTriangle />
               <span>
