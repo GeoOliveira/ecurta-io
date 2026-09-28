@@ -1,10 +1,11 @@
 import "server-only";
 import{InternalApiError}from"./errors";
-import{getAlcanceIaEnvConfig,type AlcanceIaEnvConfig}from"./config";
+import{getAlcanceIaEnvConfig}from"./config";
 import{safeEqual,verifyIntegrationSignature}from"./request-signature";
 const requestIdPattern=/^[A-Za-z0-9][A-Za-z0-9_-]{7,99}$/;
+type IntegrationAuthConfig={enabled:boolean;apiKey:string|null;source:string;authMode?:"bearer"|"bearer_hmac";allowedOrigin:string|null;hmacSecret?:string|null;maxClockSkewSeconds?:number};
 export function verifyIntegrationApiKey(header:string|null,expected:string|null){if(!header||!expected||header.includes(","))return false;const match=/^Bearer ([A-Za-z0-9._~-]+)$/.exec(header);return Boolean(match&&safeEqual(match[1],expected))}
-export function authenticateIntegrationRequest(request:Request,rawBody:string,config:AlcanceIaEnvConfig=getAlcanceIaEnvConfig()){
+export function authenticateIntegrationRequest(request:Request,rawBody:string,config:IntegrationAuthConfig=getAlcanceIaEnvConfig()){
   const requestId=request.headers.get("x-request-id");
   if(!config.enabled)throw new InternalApiError("INTEGRATION_DISABLED",403);
   const url=new URL(request.url),configuredHost=new URL(process.env.NEXT_PUBLIC_SHORT_DOMAIN??"https://encurta.io").hostname,canonicalHost=configuredHost.replace(/^www\./,""),vercelHost=process.env.VERCEL_URL;
@@ -15,12 +16,14 @@ export function authenticateIntegrationRequest(request:Request,rawBody:string,co
   if(!requestId||!requestIdPattern.test(requestId)||requestId.includes(","))throw new InternalApiError("INVALID_REQUEST_ID",400);
   if(request.headers.get("x-integration-source")!==config.source)throw new InternalApiError("UNAUTHORIZED",401);
   if(!verifyIntegrationApiKey(request.headers.get("authorization"),config.apiKey))throw new InternalApiError("UNAUTHORIZED",401);
-  const timestamp=request.headers.get("x-timestamp");
-  if(!timestamp||timestamp.includes(","))throw new InternalApiError("REQUEST_EXPIRED",401);
-  const time=Date.parse(timestamp),skew=Math.abs(Date.now()-time);
-  if(Number.isNaN(time)||skew>config.maxClockSkewSeconds*1000)throw new InternalApiError("REQUEST_EXPIRED",401);
-  const signature=request.headers.get("x-signature");
-  if(!config.hmacSecret||!signature||!verifyIntegrationSignature(config.hmacSecret,signature,{timestamp,method:request.method,path:new URL(request.url).pathname,requestId,body:rawBody}))throw new InternalApiError("INVALID_SIGNATURE",401);
+  if(config.authMode!=="bearer"){
+    const timestamp=request.headers.get("x-timestamp");
+    if(!timestamp||timestamp.includes(","))throw new InternalApiError("REQUEST_EXPIRED",401);
+    const time=Date.parse(timestamp),skew=Math.abs(Date.now()-time);
+    if(Number.isNaN(time)||skew>config.maxClockSkewSeconds!*1000)throw new InternalApiError("REQUEST_EXPIRED",401);
+    const signature=request.headers.get("x-signature");
+    if(!config.hmacSecret||!signature||!verifyIntegrationSignature(config.hmacSecret,signature,{timestamp,method:request.method,path:new URL(request.url).pathname,requestId,body:rawBody}))throw new InternalApiError("INVALID_SIGNATURE",401);
+  }
   const origin=request.headers.get("origin");
   if(origin&&(!config.allowedOrigin||origin!==config.allowedOrigin))throw new InternalApiError("UNAUTHORIZED",401);
   return{requestId,source:config.source};

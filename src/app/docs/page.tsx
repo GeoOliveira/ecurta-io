@@ -257,10 +257,9 @@ export default async function DocsPage() {
             </Callout>
           </Section>
           <Callout title="Credenciais exclusivas da Geobot">
-            Para a fonte <code>geobot</code>, configure <code>GEOBOT_API_KEY</code>
-            {" "}e <code>GEOBOT_HMAC_SECRET</code> no Encurta.io. O frontend Geobot
-            usa os mesmos valores em <code>ENCURTA_API_KEY</code> e
-            {" "}<code>ENCURTA_HMAC_SECRET</code>, somente no servidor.
+            Para a fonte <code>geobot</code>, configure somente <code>GEOBOT_API_KEY</code>
+            {" "}no Encurta.io. O frontend Geobot usa o mesmo valor em
+            {" "}<code>ENCURTA_API_KEY</code>, somente no servidor, sem HMAC.
             Não reutilize as credenciais do Alcance. Links, limites e request IDs
             são separados por integração; nenhuma pode consultar ou alterar os
             links da outra. Os exemplos abaixo usam Alcance; para a Geobot,
