@@ -9,6 +9,7 @@ import {
 import { updateInternalLinkSchema } from "@/lib/integrations/alcance-ia/schemas";
 import {
   getIntegrationSettings,
+  deleteInternalLink,
   getInternalLink,
   updateInternalLink,
 } from "@/lib/integrations/alcance-ia/service";
@@ -108,6 +109,70 @@ export async function GET(request: Request, { params }: Context) {
     safeTechnicalLog({
       requestId: requestId ?? "missing",
       endpoint: "links.get",
+      status: apiError.status,
+      durationMs: Date.now() - started,
+      code: apiError.code,
+    });
+    return errorResponse(
+      apiError,
+      requestId,
+      apiError.code === "RATE_LIMIT_EXCEEDED"
+        ? { "Retry-After": "60" }
+        : undefined,
+    );
+  }
+}
+
+export async function DELETE(request: Request, { params }: Context) {
+  const started = Date.now();
+  let source: "alcance_ia" | "geobot" = "alcance_ia";
+  let requestId: string | null = request.headers.get("x-request-id");
+  try {
+    const config = getRequestIntegrationConfig(request);
+    source = config.integration;
+    const auth = await authenticateIntegrationRequest(request, "", config);
+    requestId = auth.requestId;
+    const id = checkedId((await params).id);
+    const loaded = await getIntegrationSettings();
+    const rateHeaders = await enforceIntegrationRateLimit(
+      loaded.db,
+      auth.source,
+      "/api/internal/v1/links/{id}",
+      requestId,
+      rateLimits(loaded, config),
+      "DELETE",
+    );
+    const result = await Promise.race([
+      deleteInternalLink(id, config.integration),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new InternalApiError("SERVICE_UNAVAILABLE", 503, true)),
+          config.timeoutMs,
+        ),
+      ),
+    ]);
+    await recordIntegrationEvent(result.db, {
+      source,
+      requestId,
+      endpoint: "/api/internal/v1/links/{id}",
+      method: "DELETE",
+      statusCode: 200,
+      action: "link_deleted",
+      durationMs: Date.now() - started,
+      shortLinkId: id,
+    });
+    return Response.json(
+      { data: { id, deleted: true }, meta: { requestId } },
+      { headers: responseHeaders(requestId, rateHeaders) },
+    );
+  } catch (error) {
+    const apiError =
+      error instanceof InternalApiError
+        ? error
+        : new InternalApiError("INTERNAL_ERROR", 500, true);
+    safeTechnicalLog({
+      requestId: requestId ?? "missing",
+      endpoint: "links.delete",
       status: apiError.status,
       durationMs: Date.now() - started,
       code: apiError.code,

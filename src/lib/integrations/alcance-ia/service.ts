@@ -192,6 +192,57 @@ export async function getInternalLink(
   return { data: toData(data), db };
 }
 
+export async function getInternalLinkMetrics(
+  ids: string[],
+  source: IntegrationSource = "alcance_ia",
+) {
+  const { db, settings } = await getIntegrationSettings();
+  if (!value(settings, `integrations.${source}.enabled`, false))
+    throw new InternalApiError("INTEGRATION_DISABLED", 403);
+
+  const { data, error } = await db
+    .from("short_links")
+    .select(
+      "id,slug,status,expires_at,created_at,last_accessed_at,click_count,integration_source,destination_type",
+    )
+    .in("id", ids)
+    .eq("integration_source", source)
+    .is("deleted_at", null);
+  if (error) throw new InternalApiError("SERVICE_UNAVAILABLE", 503, true);
+
+  return { data: (data ?? []).map((link) => toData(link)), db };
+}
+
+export async function deleteInternalLink(
+  id: string,
+  source: IntegrationSource = "alcance_ia",
+) {
+  const { db, settings } = await getIntegrationSettings();
+  if (!value(settings, `integrations.${source}.enabled`, false))
+    throw new InternalApiError("INTEGRATION_DISABLED", 403);
+
+  const { data: existing, error: existingError } = await db
+    .from("short_links")
+    .select("id,integration_source")
+    .eq("id", id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (existingError)
+    throw new InternalApiError("SERVICE_UNAVAILABLE", 503, true);
+  if (!existing) throw new InternalApiError("LINK_NOT_FOUND", 404);
+  if (existing.integration_source !== source)
+    throw new InternalApiError("INTEGRATION_LINK_ACCESS_DENIED", 403);
+
+  const { error } = await db
+    .from("short_links")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id)
+    .is("deleted_at", null);
+  if (error) throw new InternalApiError("SERVICE_UNAVAILABLE", 503, true);
+
+  return { db };
+}
+
 export async function updateInternalLink(
   id: string,
   input: UpdateInternalLinkInput,
