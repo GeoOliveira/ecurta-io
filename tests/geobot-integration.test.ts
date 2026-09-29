@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHmac, createHash } from "node:crypto";
 import { POST } from "../src/app/api/internal/v1/links/route";
-import { GET, PATCH } from "../src/app/api/internal/v1/links/[id]/route";
+import { DELETE, GET, PATCH } from "../src/app/api/internal/v1/links/[id]/route";
+import { GET as GET_METRICS } from "../src/app/api/internal/v1/links/metrics/route";
 import { getGeobotEnvConfig } from "../src/lib/integrations/config";
 
 const mocks = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn() }));
@@ -27,6 +28,8 @@ const row = {
   link_status: "active",
   created_at: "2026-08-27T00:00:00.000Z",
   expires_at: null,
+  click_count: 11,
+  last_accessed_at: "2026-09-29T10:00:00.000Z",
 };
 let owner = "geobot";
 let destinationType = "whatsapp";
@@ -122,9 +125,19 @@ beforeEach(() => {
     if (table === "short_links")
       return {
         update: () => ({
-          eq: async () => ({ error: null }),
+          eq: () => ({
+            is: async () => ({ error: null }),
+          }),
         }),
         select: () => ({
+          in: () => ({
+            eq: () => ({
+              is: async () => ({
+                data: [{ ...row, integration_source: owner, destination_type: destinationType }],
+                error: null,
+              }),
+            }),
+          }),
           eq: () => ({
             maybeSingle: async () => ({
               data: { ...row, short_domain: "https://encurta.io", integration_source: owner, destination_type: destinationType },
@@ -155,6 +168,16 @@ beforeEach(() => {
     };
   });
 });
+
+function metricsRequest() {
+  return new Request(`https://www.encurta.io/api/internal/v1/links/metrics?id=${id}`, {
+    headers: {
+      Authorization: `Bearer ${credentials.geobot.key}`,
+      "X-Integration-Source": "geobot",
+      "X-Request-Id": "geobot_metrics_request_123",
+    },
+  });
+}
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
@@ -180,6 +203,15 @@ describe("isolated Geobot integration", () => {
     destinationType = 'url';
     expect((await (await GET(request('GET'), context())).json()).data.destinationType).toBe('url');
     expect((await (await PATCH(request('PATCH'), context())).json()).data.destinationType).toBe('url');
+  });
+  it("returns batched click metrics and soft-deletes only the integration link", async () => {
+    const metrics = await GET_METRICS(metricsRequest());
+    expect(metrics.status).toBe(200);
+    expect((await metrics.json()).data).toMatchObject([{ id, clickCount: 11 }]);
+
+    const deleted = await DELETE(request("DELETE"), context());
+    expect(deleted.status).toBe(200);
+    expect((await deleted.json()).data).toMatchObject({ id, deleted: true });
   });
   it('hashes the full URL, including its fragment and query', async () => {
     const hashes = [];
